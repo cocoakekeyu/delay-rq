@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 import logging
+import time
 
+from rq.job import Job
 from rq.compat import string_types
 from rq.connections import get_current_connection
 from rq.utils import backend_class, ensure_list
-from rq.default import DEFAULT_WORKER_TTL
+from rq.defaults import DEFAULT_WORKER_TTL
 from rq.exceptions import DequeueTimeout
 
 from .queue import DelayQueue
@@ -13,6 +15,7 @@ from .queue import DelayQueue
 class Timer(object):
     redis_timer_namespace_prefix = 'rq:timer:'
     redis_timers_keys = 'rq:timers'
+    job_class = Job
 
     def __init__(self, queues, name=None, default_result_ttl=None,
                  connection=None, exc_handler=None, exception_handlers=None,
@@ -46,17 +49,20 @@ class Timer(object):
 
     def dequeue_delay_job_and_enqueue(self, timeout):
         conn = self.connection
-        queue_keys = [q.key for q in self.queues]
         end_time = time.time() + timeout
         while time.time() < end_time:
-            for queue_key in queue_keys:
-                item = connection.zrange(queue_key, 0, 0, withscores=True)
+            for q in self.queues:
+                item = conn.zrange(q.delay_key, 0, 0, withscores=True)
                 if not item or item[0][1] > time.time():
                     continue
+                break
             if not item or item[0][1] > time.time():
                 time.sleep(.01)
                 continue
-            job_id = item[0][0]
-            job = self.job_class.fetch_job(job_id)
-            self.queue_class.enqueue_job(job)
-            logging.info('Enqueue delay job: {}'.format(job.id))
+            job_id = item[0][0].decode('utf-8')
+            job = self.job_class.fetch(job_id)
+            # TODO: add lock
+            if conn.zrem(q.delay_key, job_id):
+                q.enqueue_job(job)
+                logging.info('Enqueue delay job: {}'.format(job.id))
+            break
