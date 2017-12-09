@@ -2,10 +2,11 @@ import time
 import logging
 
 from redis import WatchError
+from rq.compat import string_types
 from rq.queue import Queue
 from rq.utils import parse_timeout
 from rq.job import JobStatus
-from .exceptions import InvalidJobDependency
+from rq.exceptions import InvalidJobDependency
 
 
 
@@ -19,6 +20,46 @@ class DelayQueue(Queue):
                                          async, job_class)
         prefix = self.redis_delay_queue_namespace_prefix
         self.delay_key = '{0}{1}'.format(prefix, name)
+
+    def enqueue(self, f, *args, **kwargs):
+        """Creates a job to represent the delayed function call and enqueues
+        it.
+
+        Expects the function to call, along with the arguments and keyword
+        arguments.
+
+        The function argument `f` may be any of the following:
+
+        * A reference to a function
+        * A reference to an object's instance method
+        * A string, representing the location of a function (must be
+          meaningful to the import context of the workers)
+        """
+        if not isinstance(f, string_types) and f.__module__ == '__main__':
+            raise ValueError('Functions from the __main__ module cannot be processed '
+                             'by workers')
+
+        # Detect explicit invocations, i.e. of the form:
+        #     q.enqueue(foo, args=(1, 2), kwargs={'a': 1}, timeout=30)
+        timeout = kwargs.pop('timeout', None)
+        description = kwargs.pop('description', None)
+        result_ttl = kwargs.pop('result_ttl', None)
+        ttl = kwargs.pop('ttl', None)
+        depends_on = kwargs.pop('depends_on', None)
+        job_id = kwargs.pop('job_id', None)
+        at_front = kwargs.pop('at_front', False)
+        meta = kwargs.pop('meta', None)
+        delay = kwargs.pop('delay', 0)
+
+        if 'args' in kwargs or 'kwargs' in kwargs:
+            assert args == (), 'Extra positional arguments cannot be used when using explicit args and kwargs'  # noqa
+            args = kwargs.pop('args', None)
+            kwargs = kwargs.pop('kwargs', None)
+
+        return self.enqueue_call(func=f, args=args, kwargs=kwargs, delay=delay,
+                                 timeout=timeout, result_ttl=result_ttl, ttl=ttl,
+                                 description=description, depends_on=depends_on,
+                                 job_id=job_id, at_front=at_front, meta=meta)
 
     def enqueue_call(self, func, args=None, kwargs=None, timeout=None,
                      result_ttl=None, ttl=None, description=None, delay=0,
@@ -38,7 +79,7 @@ class DelayQueue(Queue):
         job = self.job_class.create(
             func, args=args, kwargs=kwargs, connection=self.connection,
             result_ttl=result_ttl, ttl=ttl, status=JobStatus.QUEUED,
-            description=description, depends_on=depends_on, delay=delay,
+            description=description, depends_on=depends_on,
             timeout=timeout, id=job_id, origin=self.name, meta=meta)
 
         # If job depends on an unfinished job, register itself on it's
@@ -84,4 +125,5 @@ class DelayQueue(Queue):
         """Enqueue a job into delay queue"""
         conn = self.connection
         conn.zadd(self.delay_key, **{job.id: ts})
+        job.save()
         return job
