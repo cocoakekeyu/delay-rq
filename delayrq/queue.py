@@ -1,10 +1,12 @@
 import time
+import logging
 
 from redis import WatchError
 from rq.queue import Queue
 from rq.utils import parse_timeout
 from rq.job import JobStatus
 from .exceptions import InvalidJobDependency
+
 
 
 class DelayQueue(Queue):

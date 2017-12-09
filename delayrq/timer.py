@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
+import logging
+
 from rq.compat import string_types
 from rq.connections import get_current_connection
 from rq.utils import backend_class, ensure_list
+from rq.default import DEFAULT_WORKER_TTL
 from rq.exceptions import DequeueTimeout
 
 from .queue import DelayQueue
@@ -17,6 +20,7 @@ class Timer(object):
         if connection is None:
             connection = get_current_connection()
         self.connection = connection
+        self.default_timer_ttl = default_timer_ttl or DEFAULT_WORKER_TTL
 
         self.job_class = backend_class(self, 'job_class', override=job_class)
         self.queue_class = queue_class or DelayQueue
@@ -30,18 +34,29 @@ class Timer(object):
         self._name = name
         self.queues = queues
 
-    def work(self):
-        while True:
-            job = self.dequeue_job(60)
-            self.queue_class.enqueue_job(job)
+    def queue_names(self):
+        return list(map(lambda q: q.name, self.queues))
 
-    def dequeue_job(self, timeout):
+    def work(self):
+        logging.info('Timer started.')
+        logging.info('Listening on {}..'.format(self.queue_names))
         while True:
-            try:
-                result = self.queue_class.dequeue_any(self.queues, timeout,
-                                                      connection=self.connection,
-                                                      job_class=self.job_class)
-                break
-            except DequeueTimeout:
-                pass
-        return result
+            timeout = max(1, self.default_timer_ttl - 60)
+            self.dequeue_delay_job_and_enqueue(timeout)
+
+    def dequeue_delay_job_and_enqueue(self, timeout):
+        conn = self.connection
+        queue_keys = [q.key for q in self.queues]
+        end_time = time.time() + timeout
+        while time.time() < end_time:
+            for queue_key in queue_keys:
+                item = connection.zrange(queue_key, 0, 0, withscores=True)
+                if not item or item[0][1] > time.time():
+                    continue
+            if not item or item[0][1] > time.time():
+                time.sleep(.01)
+                continue
+            job_id = item[0][0]
+            job = self.job_class.fetch_job(job_id)
+            self.queue_class.enqueue_job(job)
+            logging.info('Enqueue delay job: {}'.format(job.id))
