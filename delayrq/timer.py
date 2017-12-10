@@ -5,13 +5,17 @@ from rq.job import Job
 from rq.worker import Worker, WorkerStatus, StopRequested
 from rq.compat import string_types
 from rq.connections import get_current_connection
-from rq.utils import backend_class, ensure_list
+from rq.utils import backend_class, ensure_list, make_colorizer
 from rq.logutils import setup_loghandlers
 from rq.defaults import DEFAULT_WORKER_TTL
 from rq.exceptions import DequeueTimeout
 
 from .queue import DelayQueue
 from .lock import SimpleLock
+
+
+green = make_colorizer('darkgreen')
+blue = make_colorizer('darkblue')
 
 
 class Timer(Worker):
@@ -36,7 +40,7 @@ class Timer(Worker):
         self.set_state(WorkerStatus.STARTED)
 
         self.log.info('Timer started.')
-        qnames = ', '.join(self.queue_names())
+        qnames = green(', '.join(self.queue_names()))
         self.log.info('Listening on {}..'.format(qnames))
         try:
             while True:
@@ -68,4 +72,4 @@ class Timer(Worker):
         with SimpleLock(conn, job.id):
             if conn.zrem(queue.delay_key, job.id):
                 queue.enqueue_job(job)
-                self.log.info('Enqueue delay job: {}'.format(job.id))
+                self.log.info('Enqueue delay job: {}'.format(blue(job.id)))
