@@ -1,14 +1,9 @@
 # -*- coding: utf-8 -*-
 import time
 
-from rq.job import Job
 from rq.worker import Worker, WorkerStatus, StopRequested
-from rq.compat import string_types
-from rq.connections import get_current_connection
-from rq.utils import backend_class, ensure_list, make_colorizer
+from rq.utils import make_colorizer
 from rq.logutils import setup_loghandlers
-from rq.defaults import DEFAULT_WORKER_TTL
-from rq.exceptions import DequeueTimeout
 
 from .queue import DelayQueue
 from .lock import SimpleLock
