@@ -11,7 +11,11 @@ class TestTimer(RQTestCase):
         q = DelayQueue()
         job = q.enqueue(say_hello, 'Nick', foo='bar', delay=.02)
         timer = Timer(q.name)
-        timer.dequeue_delay_job_and_enqueue(0.5)
+        time.sleep(.03)
+        result = timer.dequeue_delay_job()
+        self.assertTrue(result)
+
+        timer.process_enqueue(q, job)
 
         self.assertEqual(self.testconn.zcard(q.delay_key), 0)
 

@@ -40,26 +40,31 @@ class Timer(Worker):
         try:
             while True:
                 try:
-                    self.dequeue_delay_job_and_enqueue()
+                    result = self.dequeue_delay_job()
+                    if not result:
+                        time.sleep(.01)
+                        continue
+                    queue, job = result
+                    self.process_enqueue(queue, job)
                 except StopRequested:
                     break
         finally:
             self.register_death()
 
-    def dequeue_delay_job_and_enqueue(self):
+    def dequeue_delay_job(self):
         conn = self.connection
-        while True:
-            for q in self.queues:
-                item = conn.zrange(q.delay_key, 0, 0, withscores=True)
-                if not item or item[0][1] > time.time():
-                    continue
-                break
-            if not item or item[0][1] > time.time():
-                time.sleep(.01)
-                continue
-            job_id = item[0][0].decode('utf-8')
-            job = self.job_class.fetch(job_id)
-            # TODO: add lock
-            if conn.zrem(q.delay_key, job_id):
-                q.enqueue_job(job)
-                self.log.info('Enqueue delay job: {}'.format(job.id))
+        for q in self.queues:
+            item = conn.zrange(q.delay_key, 0, 0, withscores=True)
+            if item and item[0][1] < time.time():
+                job_id = item[0][0].decode('utf-8')
+                job = self.job_class.fetch(job_id)
+                return q, job
+        else:
+            return None
+
+    def process_enqueue(self, queue, job):
+        conn = self.connection
+        # TODO: add lock
+        if conn.zrem(queue.delay_key, job.id):
+            queue.enqueue_job(job)
+            self.log.info('Enqueue delay job: {}'.format(job.id))
