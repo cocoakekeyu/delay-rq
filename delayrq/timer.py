@@ -11,6 +11,7 @@ from rq.defaults import DEFAULT_WORKER_TTL
 from rq.exceptions import DequeueTimeout
 
 from .queue import DelayQueue
+from .lock import SimpleLock
 
 
 class Timer(Worker):
@@ -64,7 +65,7 @@ class Timer(Worker):
 
     def process_enqueue(self, queue, job):
         conn = self.connection
-        # TODO: add lock
-        if conn.zrem(queue.delay_key, job.id):
-            queue.enqueue_job(job)
-            self.log.info('Enqueue delay job: {}'.format(job.id))
+        with SimpleLock(conn, job.id):
+            if conn.zrem(queue.delay_key, job.id):
+                queue.enqueue_job(job)
+                self.log.info('Enqueue delay job: {}'.format(job.id))

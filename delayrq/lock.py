@@ -32,7 +32,4 @@ class SimpleLock(object):
         return self
 
     def __exit__(self, type, value, traceback):
-        if type is None:
-            self.connection.delete(self.lockname)
-
-
+        self.connection.delete(self.lockname)
