@@ -6,7 +6,7 @@ from rq.utils import make_colorizer
 from rq.logutils import setup_loghandlers
 
 from .queue import DelayQueue
-from .lock import SimpleLock
+from .lock import SimpleLock, NoLock
 
 
 green = make_colorizer('darkgreen')
@@ -64,7 +64,10 @@ class Timer(Worker):
 
     def process_enqueue(self, queue, job):
         conn = self.connection
-        with SimpleLock(conn, job.id):
-            if conn.zrem(queue.delay_key, job.id):
-                queue.enqueue_job(job)
-                self.log.info('Enqueue delay job: {}'.format(blue(job.id)))
+        try:
+            with SimpleLock(conn, job.id):
+                if conn.zrem(queue.delay_key, job.id):
+                    queue.enqueue_job(job)
+                    self.log.info('Enqueue delay job: {}'.format(blue(job.id)))
+        except NoLock:
+            pass

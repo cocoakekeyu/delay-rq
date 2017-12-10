@@ -3,6 +3,10 @@ import uuid
 import time
 
 
+class NoLock(Exception):
+    "Raised when a lock cannot be acquired"
+
+
 class SimpleLock(object):
     """This a simple redis lock"""
 
@@ -29,7 +33,12 @@ class SimpleLock(object):
 
             time.sleep(.001)
 
-        return self
+        raise NoLock()
 
     def __exit__(self, type, value, traceback):
-        self.connection.delete(self.lockname)
+        conn = self.connection
+        lockname = self.lockname
+
+        item = conn.get(lockname)
+        if item and item.decode('utf-8') == self.identifier:
+            conn.delete(lockname)
