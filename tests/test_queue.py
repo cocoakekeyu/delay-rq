@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from tests import RQTestCase
 from tests.fixtures import say_hello
-from delayrq.queue import DelayQueue
+from delayrq import DelayQueue
 
 
 class TestQueue(RQTestCase):
@@ -28,9 +28,10 @@ class TestQueue(RQTestCase):
         # Inspect data inside Redis
         q_key = 'rq:delay_queue:default'
         self.assertEqual(self.testconn.zcard(q_key), 1)
-        self.assertEqual(
-            self.testconn.zrange(q_key, 0, 0, withscores=True)[0][0].decode('ascii'),
-            job_id)
+
+        item = self.testconn.zrange(q_key, 0, 0, withscores=True)
+        item_id = item[0][0].decode('ascii')
+        self.assertEqual(item_id, job_id)
 
     def test_enqueue_with_no_delay(self):
         """Enqueueing job onto queues."""

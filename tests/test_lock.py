@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 import uuid
 
-from rq.connections import use_connection
-
 from delayrq.lock import SimpleLock
 from tests import RQTestCase
 
@@ -18,4 +16,3 @@ class TestLock(RQTestCase):
                              identifier)
 
         self.assertTrue(self.testconn.get("lock:"+name) is None)
-

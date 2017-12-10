@@ -1,5 +1,5 @@
+# -*- coding: utf-8 -*-
 import time
-import logging
 
 from redis import WatchError
 from rq.compat import string_types
@@ -7,7 +7,6 @@ from rq.queue import Queue
 from rq.utils import parse_timeout
 from rq.job import JobStatus
 from rq.exceptions import InvalidJobDependency
-
 
 
 class DelayQueue(Queue):

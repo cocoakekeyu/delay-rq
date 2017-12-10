@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import time
+
 from tests import RQTestCase
 from tests.fixtures import say_hello
 from delayrq.queue import DelayQueue
@@ -18,5 +19,3 @@ class TestTimer(RQTestCase):
         timer.process_enqueue(q, job)
 
         self.assertEqual(self.testconn.zcard(q.delay_key), 0)
-
-
